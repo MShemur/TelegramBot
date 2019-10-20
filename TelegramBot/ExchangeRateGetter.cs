@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Telegram.Bot;
 using Telegram.Bot.Args;
 using Telegram.Bot.Types.Enums;
@@ -10,37 +8,37 @@ using Telegram.Bot.Types.ReplyMarkups;
 
 namespace TelegramBot
 {
-    public class EchangeRateGetter
+    public class ExchangeRateGetter
     {
         private ITelegramBotClient client;
         private InlineKeyboardMarkup markup;
         private List<string> availableCurrency;
-        private JsonReader jsoner;
+        private JsonReader jsonReader;
         private DateTime date;
-        public EchangeRateGetter(ITelegramBotClient client)
+        public ExchangeRateGetter(ITelegramBotClient client)
         {
-            client.OnMessage += Bot_Message_Get_Date;
+            client.OnMessage += BotMessageGetDate;
             client.OnCallbackQuery += BotOnCallbackQueryReceived;
 
             this.client = client;
             client.StartReceiving();
         }
 
-        async void Bot_Message_Get_Date(object sender, MessageEventArgs e)
+        private async void BotMessageGetDate(object sender, MessageEventArgs e)
         {
             string text = e?.Message?.Text;
             if (e.Message == null || e.Message.Type != MessageType.Text) return;
-
             if (text == "/start")
+            {
                 await client.SendTextMessageAsync(chatId: e.Message.Chat, text: $"Type date",
                         ParseMode.Markdown, false, false, 0, replyMarkup: new ReplyKeyboardRemove())
                     .ConfigureAwait(false);
-
+            }
             else if (DateTime.TryParse(text, out date))
             {
-                jsoner = new JsonReader();
+                jsonReader = new JsonReader();
                 availableCurrency = new List<string>();
-                Bot_Message_Get_Currency(e);
+                BotMessageGetCurrency(e);
             }
             else
             {
@@ -54,20 +52,21 @@ namespace TelegramBot
         {
             var callbackQuery = callbackQueryEventArgs.CallbackQuery;
 
-            if (date != DateTime.MinValue)
-                if (availableCurrency.Contains(callbackQuery.Data))
-                {
-                    string rate = jsoner.GetRate(callbackQuery.Data);
-                    await client.SendTextMessageAsync(chatId: callbackQuery.Message.Chat.Id, text: $"Exchange rate on {date.ToShortDateString()} for {callbackQuery.Data} is {rate}")
-                        .ConfigureAwait(false);
-                }
+            if (date == DateTime.MinValue) return;
+            if (!availableCurrency.Contains(callbackQuery.Data)) return;
+
+            string rate = jsonReader.GetRate(callbackQuery.Data);
+            Console.WriteLine($"{callbackQuery.Message.From} asked for exchange rate on {date.ToShortDateString()} for {callbackQuery.Data} is {rate}");
+
+            await client.SendTextMessageAsync(chatId: callbackQuery.Message.Chat.Id, text: $"Exchange rate on {date.ToShortDateString()} for {callbackQuery.Data} is {rate}")
+                .ConfigureAwait(false);
         }
 
-        async void Bot_Message_Get_Currency(MessageEventArgs e)
+        private async void BotMessageGetCurrency(MessageEventArgs e)
         {
-            availableCurrency = jsoner.GetCurrencyList(date.ToShortDateString());
-            ButtonCreator buttonCreator = new ButtonCreator(availableCurrency);
-            markup = buttonCreator.GetMurkup();
+            availableCurrency = jsonReader.GetCurrencyList(date.ToShortDateString());
+            var buttonCreator = new ButtonCreator(availableCurrency);
+            markup = buttonCreator.GetMarkup();
             if (markup.InlineKeyboard.Any())
             {
                 await client.SendTextMessageAsync(chatId: e.Message.Chat, text: $"Choose currency",

@@ -15,7 +15,7 @@ namespace TelegramBot
             {
                 if (variable.currency == currency)
                 {
-                    return variable.saleRateNB + "/" + variable.purchaseRateNB;
+                    return variable.saleRate + "/" + variable.purchaseRate;
                 }
             }
             return null;
@@ -29,10 +29,10 @@ namespace TelegramBot
             json = new WebClient().DownloadString(url);
 
             dynamic obj = JsonConvert.DeserializeObject<dynamic>(json);
-            foreach (var variable in obj.exchangeRate)
+            foreach (var item in obj.exchangeRate)
             {
-                if (variable?.currency != null)
-                    currencyList.Add(variable?.currency?.ToString());
+                if (item?.currency != null)
+                    currencyList.Add(item?.currency?.ToString());
             }
             return currencyList;
         }
