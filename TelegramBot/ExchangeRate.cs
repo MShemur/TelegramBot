@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
+using Newtonsoft.Json;
 using Telegram.Bot;
 using Telegram.Bot.Args;
 using Telegram.Bot.Types.Enums;
@@ -8,20 +10,22 @@ using Telegram.Bot.Types.ReplyMarkups;
 
 namespace TelegramBot
 {
-    public class ExchangeRateGetter
+    public class ExchangeRate
     {
         private ITelegramBotClient client;
         private InlineKeyboardMarkup markup;
         private List<string> availableCurrency;
-        private JsonReader jsonReader;
         private DateTime date;
-        public ExchangeRateGetter(ITelegramBotClient client)
+        private string json;
+
+        public ExchangeRate(ITelegramBotClient client)
         {
             client.OnMessage += BotMessageGetDate;
             client.OnCallbackQuery += BotOnCallbackQueryReceived;
 
             this.client = client;
             client.StartReceiving();
+
         }
 
         private async void BotMessageGetDate(object sender, MessageEventArgs e)
@@ -36,7 +40,7 @@ namespace TelegramBot
             }
             else if (DateTime.TryParse(text, out date))
             {
-                jsonReader = new JsonReader();
+                json = GetJson(date);
                 availableCurrency = new List<string>();
                 BotMessageGetCurrency(e);
             }
@@ -55,7 +59,7 @@ namespace TelegramBot
             if (date == DateTime.MinValue) return;
             if (!availableCurrency.Contains(callbackQuery.Data)) return;
 
-            string rate = jsonReader.GetRate(callbackQuery.Data);
+            string rate = GetRate(callbackQuery.Data, json);
             Console.WriteLine($"{callbackQuery.Message.From} asked for exchange rate on {date.ToShortDateString()} for {callbackQuery.Data} is {rate}");
 
             await client.SendTextMessageAsync(chatId: callbackQuery.Message.Chat.Id, text: $"Exchange rate on {date.ToShortDateString()} for {callbackQuery.Data} is {rate}")
@@ -64,7 +68,7 @@ namespace TelegramBot
 
         private async void BotMessageGetCurrency(MessageEventArgs e)
         {
-            availableCurrency = jsonReader.GetCurrencyList(date.ToShortDateString());
+            availableCurrency = GetCurrencyList(json);
             var buttonCreator = new ButtonCreator(availableCurrency);
             markup = buttonCreator.GetMarkup();
             if (markup.InlineKeyboard.Any())
@@ -82,6 +86,48 @@ namespace TelegramBot
                         ParseMode.Markdown, false, false, 0, markup)
                     .ConfigureAwait(false);
             }
+        }
+
+        public string GetRate(string currency, string json)
+        {
+            dynamic obj = JsonConvert.DeserializeObject<dynamic>(json);
+            foreach (var variable in obj.exchangeRate)
+            {
+                if (variable.currency == currency)
+                {
+                    if (variable?.saleRate != null)
+                    {
+                        return variable.saleRate + "/" + variable.purchaseRate;
+                    }
+                    else
+                    {
+                        return variable.saleRateNB + "/" + variable.purchaseRateNB + " (NB rating)";
+                    }
+                }
+            }
+            return null;
+        }
+
+        private string GetJson(DateTime dateTime)
+        {
+            string date = dateTime.ToShortDateString();
+            string url = @"https://api.privatbank.ua/p24api/exchange_rates?json&date=";
+            url += date;
+            string json = new WebClient().DownloadString(url);
+            return json;
+        }
+
+        public List<string> GetCurrencyList(string json)
+        {
+            List<string> currencyList = new List<string>();
+
+            dynamic obj = JsonConvert.DeserializeObject<dynamic>(json);
+            foreach (var item in obj.exchangeRate)
+            {
+                if (item?.currency != null)
+                    currencyList.Add(item?.currency?.ToString());
+            }
+            return currencyList;
         }
     }
 }

@@ -5,7 +5,7 @@ using Telegram.Bot.Types.ReplyMarkups;
 
 namespace TelegramBot
 {
-    class ButtonCreator
+    public class ButtonCreator
     {
         private Queue<string> buttons;
         private const int BUTTONS_IN_ROW = 5;
@@ -26,7 +26,7 @@ namespace TelegramBot
 
                 for (int j = 0; j < button.Length; j++)
                 {
-                    button[j]= InlineKeyboardButton.WithCallbackData(buttons.Dequeue());
+                    button[j] = InlineKeyboardButton.WithCallbackData(buttons.Dequeue());
                 }
                 board[i] = button.ToList();
             }
